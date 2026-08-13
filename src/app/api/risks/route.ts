@@ -5,8 +5,19 @@ import { validateRisk } from "@/lib/validate";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const risks = await db.list();
-  return Response.json(risks);
+  try {
+    const risks = await db.list();
+    return Response.json(risks);
+  } catch (e) {
+    console.error("[api/risks] GET failed", e);
+    return Response.json(
+      {
+        error: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack : undefined,
+      },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(request: NextRequest) {

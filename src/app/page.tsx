@@ -14,7 +14,18 @@ import { Kpi, Panel } from "@/components/panel";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const risks = await db.list();
+  let risks: Awaited<ReturnType<typeof db.list>>;
+  try {
+    risks = await db.list();
+  } catch (e) {
+    return (
+      <Panel title="Error loading dashboard">
+        <pre className="whitespace-pre-wrap text-sm text-red">
+          {e instanceof Error ? `${e.message}\n\n${e.stack}` : String(e)}
+        </pre>
+      </Panel>
+    );
+  }
 
   const open = risks.filter((r) => r.status !== "Closed");
   const closed = risks.length - open.length;
