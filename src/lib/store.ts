@@ -25,27 +25,65 @@ export interface NewRiskInput {
 
 const DATA_FILE = path.join(process.cwd(), "data", "risks.json");
 
-export async function ensureDataFile() {
-  await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
+let memoryStore: Risk[] | null = null;
+let readonly = false;
+
+async function probeWritable(): Promise<boolean> {
   try {
-    await fs.access(DATA_FILE);
+    await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
+    await fs.writeFile(DATA_FILE, JSON.stringify([]), "utf-8");
+    return true;
   } catch {
-    await fs.writeFile(DATA_FILE, JSON.stringify([], null, 2), "utf-8");
+    return false;
+  }
+}
+
+export async function ensureDataFile() {
+  if (readonly) return;
+  try {
+    await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
+    try {
+      await fs.access(DATA_FILE);
+    } catch {
+      await fs.writeFile(DATA_FILE, JSON.stringify([], null, 2), "utf-8");
+    }
+  } catch {
+    readonly = true;
   }
 }
 
 async function readAll(): Promise<Risk[]> {
-  await ensureDataFile();
-  const raw = await fs.readFile(DATA_FILE, "utf-8");
-  return JSON.parse(raw || "[]") as Risk[];
+  if (readonly) return memoryStore ?? [];
+  try {
+    await ensureDataFile();
+    const raw = await fs.readFile(DATA_FILE, "utf-8");
+    return JSON.parse(raw || "[]") as Risk[];
+  } catch {
+    return memoryStore ?? [];
+  }
 }
 
 export async function writeAll(risks: Risk[]) {
-  await ensureDataFile();
-  await fs.writeFile(DATA_FILE, JSON.stringify(risks, null, 2), "utf-8");
+  if (readonly) {
+    memoryStore = risks;
+    return;
+  }
+  try {
+    await ensureDataFile();
+    await fs.writeFile(DATA_FILE, JSON.stringify(risks, null, 2), "utf-8");
+  } catch {
+    readonly = true;
+    memoryStore = risks;
+  }
 }
 
 export async function seedJson(risks: Risk[]) {
+  const writes = await probeWritable();
+  if (!writes) {
+    readonly = true;
+    memoryStore = risks;
+    return;
+  }
   await writeAll(risks);
 }
 
