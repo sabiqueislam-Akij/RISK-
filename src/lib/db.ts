@@ -8,29 +8,25 @@ import {
   nextRiskId as nextJson,
   seedJson,
 } from "./store";
-import {
-  listRisksPg,
-  getRiskPg,
-  createRiskPg,
-  addUpdatePg,
-  nextRiskIdPg,
-  seedPg,
-} from "./postgres-store";
 import { seedRisks } from "./seed";
 
 const usePg = !!process.env.POSTGRES_URL;
 
 let seeded = false;
 
+async function pg() {
+  return await import("./postgres-store");
+}
+
 async function ensureSeeded() {
   if (seeded) return;
-  const rows = usePg ? await listRisksPg() : await listJson();
-  if (rows.length === 0) {
-    if (usePg) {
-      await seedPg(seedRisks);
-    } else {
-      await seedJson(seedRisks);
-    }
+  if (usePg) {
+    const pgStore = await pg();
+    const rows = await pgStore.listRisksPg();
+    if (rows.length === 0) await pgStore.seedPg(seedRisks);
+  } else {
+    const rows = await listJson();
+    if (rows.length === 0) await seedJson(seedRisks);
   }
   seeded = true;
 }
@@ -38,19 +34,19 @@ async function ensureSeeded() {
 export const db = {
   list: async (): Promise<Risk[]> => {
     await ensureSeeded();
-    return usePg ? listRisksPg() : listJson();
+    return usePg ? (await pg()).listRisksPg() : listJson();
   },
   get: async (id: string): Promise<Risk | undefined> => {
     await ensureSeeded();
-    return usePg ? getRiskPg(id) : getJson(id);
+    return usePg ? (await pg()).getRiskPg(id) : getJson(id);
   },
   create: async (input: NewRiskInput): Promise<Risk> =>
-    usePg ? createRiskPg(input) : createJson(input),
+    usePg ? (await pg()).createRiskPg(input) : createJson(input),
   addUpdate: async (
     id: string,
     update: Omit<RiskUpdate, "id" | "at"> & { status: RiskStatus }
   ): Promise<Risk | undefined> =>
-    usePg ? addUpdatePg(id, update) : updateJson(id, update),
+    usePg ? (await pg()).addUpdatePg(id, update) : updateJson(id, update),
   nextRiskId: async (): Promise<string> =>
-    usePg ? nextRiskIdPg() : nextJson(),
+    usePg ? (await pg()).nextRiskIdPg() : nextJson(),
 };
